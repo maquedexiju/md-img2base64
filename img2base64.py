@@ -1,20 +1,43 @@
+#!/Library/Frameworks/Python.framework/Versions/3.6/bin/python3
+#coding:utf-8 
+
 import re, getopt, sys, base64
 import os.path
+import os
 import urllib.request
 import markdown
 import subprocess
 
+#config
+webServerPath = '/Library/WebServer/Documents'
+scriptPath = os.path.expanduser('~') +'/MyScript'
+styleSheet = '/Users/XuXiaotian/MyScript/style.css'
+
+#tmp val
+browseInBrowser = True
+markdownFile = False
+filePathGiven = ''
+
 # unicode invalid characters    
 def main(args):
     try:
-        opts, args = getopt.getopt(args, 'hf:', ['help', 'file='])
+        opts, args = getopt.getopt(args, 'hf:wm', ['help', 'file=', 'webfile', 'markdown'])
+        if len(args)>0:
+                print(args[0])
+                handle_file(args[0])
         for opt, arg in opts:
             if opt in('-h', '--help'):
                 print('-f, --f filePath: choose the file to be handled')
             elif opt in('-f', '--file'):
-                handle_file(arg)
-            elif args[0]:
-                handle_file(args[0])
+                filePathGiven = arg
+            elif opt in('-w', '--webfile'):
+                browseInBrowser = False
+            elif opt in('-m', '--markdown'):
+                markdownFile = True
+
+        if filePathGiven != '':
+            handle_file(filePathGiven)
+
 
     except getopt.GetoptError as e:
         sys.exit()
@@ -32,18 +55,65 @@ def handle_file(filePath):
         for line in file.readlines():
             tmpString.append(handle_src_path(line, basePath))
 
+    #whether to generate a markdown file
+    if markdownFile == True:
+        #found a file under the path
+        mdFileName = basePath + '/' + baseName + '_base64.md'
+    else:
+        #use the tmp file
+        if scriptPath != '' and os.path.exists(scriptPath):
+            if not os.path.exists(scriptPath+ '/img2base64'):
+                os.mkdir(scriptPath+ '/img2base64')
+            mdFileName = scriptPath+ '/img2base64/tmp.md'
+        else:
+            if not os.path.exists(os.path.expanduser('~') + '/.img2base64'):
+                os.mkdir(os.path.expanduser('~') + '/.img2base64')
+            mdFileName = os.path.expanduser('~') + '/.img2base64/tmp.md'
+
     #write the new data to a html file
-    with open('tmp.md', 'w') as mdFile:
+    with open( mdFileName, 'w') as mdFile:
         mdFile.writelines(tmpString)
     
+    #whether to save the file to the webserver
+    if browseInBrowser == False:
+        htmlName = basePath + '/' + baseName + '.html'
+    else: 
+        htmlName = webServerPath + '/' + 'tmp.html'
+
+    
     #transfer md to html
-    htmlName = basePath + '/' + baseName + '.html'
-    markdown.markdownFromFile(input = 'tmp.md', output = htmlName, encoding = 'utf-8',
+    htmlContent = """<html>
+    <head>
+        <meta charset="utf-8">
+        <style type="text/css">
+    """
+
+    if styleSheet != '':
+        with open(styleSheet, 'r') as styleFile:
+            htmlContent += styleFile.read()
+    
+    htmlContent += """
+        </style>
+    </head>
+
+    <body>
+    """
+
+    htmlContent += markdown.markdown('\n'.join(tmpString), encoding = 'utf-8',
                                 extensions = ['markdown.extensions.extra', 
                                                 'markdown.extensions.meta',
                                                 'markdown.extensions.nl2br',
                                                 'markdown.extensions.sane_lists',
                                                 'markdown.extensions.toc'])
+    
+    htmlContent +="""
+    </body>
+    </html>
+    """
+
+    #write the content to the html file
+    with open(htmlName, 'w') as htmlFile:
+        htmlFile.write(htmlContent)
     
     # open the html file
     subprocess.call(["open", htmlName])
